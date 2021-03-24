@@ -3,18 +3,19 @@ package main;
 import server.*;
 import weather.WeatherServerHandler;
 import java.io.IOException;
-import java.net.ServerSocket;
-
+import java.net.InetSocketAddress;
+import java.nio.channels.AsynchronousServerSocketChannel;
 
 public class Main {
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
         runServer();
     }
 
     public static void runServer() {
         try {
-            ServerSocket serverSocket = new ServerSocket(8080);
+            AsynchronousServerSocketChannel serverSocket = AsynchronousServerSocketChannel.open().
+                    bind(new InetSocketAddress(8080));
 
             ServerHandler serverHandler = new WeatherServerHandler(10);
 

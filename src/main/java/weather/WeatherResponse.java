@@ -4,6 +4,7 @@ import http_utilities.RequestType;
 import org.json.JSONObject;
 
 public class WeatherResponse {
+
     private String query = null;
     private String observationTime = null;
     private int feelsLike = Integer.MIN_VALUE;

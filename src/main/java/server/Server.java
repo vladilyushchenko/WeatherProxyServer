@@ -2,61 +2,67 @@ package server;
 
 import http_utilities.RequestType;
 import org.json.JSONObject;
-import java.io.*;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.nio.channels.AsynchronousServerSocketChannel;
+import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public class Server {
-    ServerSocket serverSocket;
+    AsynchronousServerSocketChannel serverSocket;
     ServerHandler serverHandler;
 
-    public Server(ServerSocket serverSocket, ServerHandler serverHandler) {
+    public Server(AsynchronousServerSocketChannel serverSocket, ServerHandler serverHandler) {
         this.serverSocket = serverSocket;
         this.serverHandler = serverHandler;
     }
 
-    public void startServer() throws IOException {
+    public void startServer() throws ExecutionException, InterruptedException {
         ExecutorService executorService = Executors.newFixedThreadPool(8);
 
-        while (!serverSocket.isClosed()) {
-            Socket socket = serverSocket.accept();
-            executorService.submit(new ServerThread(socket,
-                    new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8)),
-                    new PrintWriter(socket.getOutputStream())));
+        while (serverSocket.isOpen()) {
+            Future<AsynchronousSocketChannel> futureSocket = serverSocket.accept();
+
+            executorService.submit(new ServerThread(futureSocket.get()));
         }
     }
 
     private class ServerThread implements Runnable {
-        Socket socket;
-        BufferedReader input;
-        PrintWriter output;
+        AsynchronousSocketChannel socketChannel;
 
-        public ServerThread(Socket socket, BufferedReader input, PrintWriter output) {
-            this.socket = socket;
-            this.input = input;
-            this.output = output;
+        public ServerThread(AsynchronousSocketChannel socketChannel) {
+            this.socketChannel = socketChannel;
         }
 
         @Override
         public void run() {
             try {
-                String requestLine = input.readLine();
+                ByteBuffer buffer = ByteBuffer.allocate(1024);
+                Future<Integer> readRequest = socketChannel.read(buffer);
+                readRequest.get();
+
+                String requestString = new String(buffer.array(), StandardCharsets.UTF_8).trim();
+                String requestLine = requestString.split("\r\n")[0];
 
                 JSONObject requestJSON = serverHandler.getRequestJSON(requestLine);
 
                 JSONObject responseJSON = serverHandler.getResponse(requestJSON);
 
+                buffer.flip();
                 if (!responseJSON.getString("requestType").equals(RequestType.GET_FAVICON.toString())) {
-                    output.println(serverHandler.getStringResponseFromJSON(responseJSON));
+                    buffer = ByteBuffer.wrap(
+                            serverHandler.
+                            getStringResponseFromJSON(responseJSON).
+                            getBytes(StandardCharsets.UTF_8)
+                    );
+                    Future<Integer> writeResult = socketChannel.write(buffer);
+                    writeResult.get();
                 }
-
-                output.flush();
-                output.close();
-                input.close();
-                socket.close();
+                buffer.clear();
+                socketChannel.close();
             } catch (Exception e) {
                 e.printStackTrace();
             }

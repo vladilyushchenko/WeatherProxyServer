@@ -128,7 +128,7 @@ public class WeatherServerHandler implements ServerHandler {
     public String getStringResponseFromJSON(JSONObject jsonResponse) {
         WeatherResponse weatherResponse = new WeatherResponse(jsonResponse);
         if (weatherResponse.getRequestType().equals(RequestType.INCORRECT) ||
-                !HttpCodeTypes.isSuccess(weatherResponse.getHttpCode())) {
+                !HttpCodeTypes.isSuccessCode(weatherResponse.getHttpCode())) {
             return incorrectHtmlResponse(weatherResponse);
         }
         return String.format("""
